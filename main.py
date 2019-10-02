@@ -30,7 +30,6 @@ class Policy(nn.Module):
 
 
 def finish_episode(optimizer, policy, config):
-    print("Finishing episode")
     R = 0
     policy_loss = []
     returns = []
@@ -53,45 +52,58 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_episodes", type=int, default=5)
     parser.add_argument("--num_repeat_action", type=int, default=4)
-    parser.add_argument("--max_steps", type=int, default=1_000)
-
     parser.add_argument("--reward_threshold", type=int, default=1_000)
-
-
-    parser.add_argument('--gamma', type=float, default=0.99, metavar='G',
-                        help='discount factor (default: 0.99)')
-    parser.add_argument('--seed', type=int, default=543, metavar='N',
-                        help='random seed (default: 543)')
-    parser.add_argument('--render', action='store_true',
-                        help='render the environment')
-    parser.add_argument('--log-interval', type=int, default=1, metavar='N',
-                        help='interval between training status logs (default: 10)')
+    parser.add_argument("--max_steps", type=int, default=1_000)
+    parser.add_argument(
+        "--gamma",
+        type=float,
+        default=0.99,
+        metavar="G",
+        help="discount factor (default: 0.99)",
+    )
+    parser.add_argument(
+        "--seed", type=int, default=543, metavar="N", help="random seed (default: 543)"
+    )
+    parser.add_argument("--render", action="store_true", help="render the environment")
+    parser.add_argument(
+        "--log-interval",
+        type=int,
+        default=1,
+        metavar="N",
+        help="interval between training status logs (default: 10)",
+    )
     config = parser.parse_args()
 
-    env = gym.make('Seaquest-v0')
-    print(env.spec)
+    env = gym.make("Seaquest-v0")
     torch.manual_seed(config.seed)
     env.seed(config.seed)
 
     num_actions = env.action_space.n
     agent = attention.Agent(num_actions=num_actions)
-    
+
     policy = Policy(agent=agent)
     optimizer = optim.Adam(policy.parameters(), lr=1e-2)
     eps = np.finfo(np.float32).eps.item()
 
-    running_reward = 10.
+    running_reward = 10.0
+
+    # NOTE: This is currently batched once for a single instance of the game.
+    # I think the authors batch it across 32 trajectories of the same agent
+    # across different instances of the game (trajectories). I also am using
+    # a different update mechanism as of now (REINFORCE vs. A3C).
+
     for i_episode in range(config.num_episodes):
-        print("Reset agents and environment.")
         observation = env.reset()
-        # resets hidden states.
+        # resets hidden states, otherwise the comp. graph history spans episodes
+        # and relies on freed buffers.
         agent.reset()
         ep_reward = 0
         for t in range(config.max_steps):
             action = policy(observation)
-            reward = 0.
+            reward = 0.0
             for _ in range(config.num_repeat_action):
-                if config.render: env.render()
+                if config.render:
+                    env.render()
                 observation, _reward, done, _ = env.step(action)
                 reward += _reward
                 if done:
@@ -102,10 +114,17 @@ if __name__ == "__main__":
                 running_reward = 0.05 * ep_reward + (1 - 0.05) * running_reward
                 finish_episode(optimizer, policy, config)
                 if i_episode % config.log_interval == 0:
-                    print('Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}'.format(
-                        i_episode, ep_reward, running_reward))
+                    print(
+                        "Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}".format(
+                            i_episode, ep_reward, running_reward
+                        )
+                    )
                 if running_reward > config.reward_threshold:
-                    print("Solved! Running reward is now {} and "
-                        "the last episode runs to {} time steps!".format(running_reward, t))
+                    print(
+                        "Solved! Running reward is now {} and "
+                        "the last episode runs to {} time steps!".format(
+                            running_reward, t
+                        )
+                    )
                 break
     env.close()

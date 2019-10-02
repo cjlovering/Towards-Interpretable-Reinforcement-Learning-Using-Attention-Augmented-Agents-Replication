@@ -1,6 +1,7 @@
 import torch
 import torch.nn.functional as F
-from torch import nn 
+from torch import nn
+
 
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_channels, hidden_channels, kernel_size):
@@ -34,34 +35,92 @@ class ConvLSTMCell(nn.Module):
 
         self.padding = int((kernel_size - 1) / 2)
 
-        self.Wxi = nn.Conv2d(self.input_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=True)
-        self.Whi = nn.Conv2d(self.hidden_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=False)
-        self.Wxf = nn.Conv2d(self.input_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=True)
-        self.Whf = nn.Conv2d(self.hidden_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=False)
-        self.Wxc = nn.Conv2d(self.input_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=True)
-        self.Whc = nn.Conv2d(self.hidden_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=False)
-        self.Wxo = nn.Conv2d(self.input_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=True)
-        self.Who = nn.Conv2d(self.hidden_channels, self.hidden_channels, self.kernel_size, 1, self.padding, bias=False)
+        self.Wxi = nn.Conv2d(
+            self.input_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=True,
+        )
+        self.Whi = nn.Conv2d(
+            self.hidden_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=False,
+        )
+        self.Wxf = nn.Conv2d(
+            self.input_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=True,
+        )
+        self.Whf = nn.Conv2d(
+            self.hidden_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=False,
+        )
+        self.Wxc = nn.Conv2d(
+            self.input_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=True,
+        )
+        self.Whc = nn.Conv2d(
+            self.hidden_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=False,
+        )
+        self.Wxo = nn.Conv2d(
+            self.input_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=True,
+        )
+        self.Who = nn.Conv2d(
+            self.hidden_channels,
+            self.hidden_channels,
+            self.kernel_size,
+            1,
+            self.padding,
+            bias=False,
+        )
 
         self.Wci = None
         self.Wcf = None
         self.Wco = None
-        
+
         self.prev_hidden = None
 
     def forward(self, x):
         if self.prev_hidden is None:
             batch_size, _, height, width = x.size()
-            h, c = self.init_hidden(batch_size, self.hidden_channels, height, width, x.device)
+            h, c = self.init_hidden(
+                batch_size, self.hidden_channels, height, width, x.device
+            )
         else:
             h, c = self.prev_hidden
-        
+
         ci = torch.sigmoid(self.Wxi(x) + self.Whi(h) + c * self.Wci)
         cf = torch.sigmoid(self.Wxf(x) + self.Whf(h) + c * self.Wcf)
         cc = cf * c + ci * torch.tanh(self.Wxc(x) + self.Whc(h))
         co = torch.sigmoid(self.Wxo(x) + self.Who(h) + cc * self.Wco)
         ch = co * torch.tanh(cc)
-        
+
         self.prev_hidden = ch, cc
         return ch, cc
 
@@ -70,13 +129,24 @@ class ConvLSTMCell(nn.Module):
 
     def init_hidden(self, batch_size, hidden, height, width, device):
         if self.Wci is None:
-            self.Wci = torch.zeros(1, hidden, height, width, requires_grad=True).to(device)
-            self.Wcf = torch.zeros(1, hidden, height, width, requires_grad=True).to(device)
-            self.Wco = torch.zeros(1, hidden, height, width, requires_grad=True).to(device)
+            self.Wci = torch.zeros(1, hidden, height, width, requires_grad=True).to(
+                device
+            )
+            self.Wcf = torch.zeros(1, hidden, height, width, requires_grad=True).to(
+                device
+            )
+            self.Wco = torch.zeros(1, hidden, height, width, requires_grad=True).to(
+                device
+            )
         return (
-            torch.zeros(batch_size, hidden, height, width, requires_grad=True).to(device),
-            torch.zeros(batch_size, hidden, height, width, requires_grad=True).to(device)
+            torch.zeros(batch_size, hidden, height, width, requires_grad=True).to(
+                device
+            ),
+            torch.zeros(batch_size, hidden, height, width, requires_grad=True).to(
+                device
+            ),
         )
+
 
 class VisionNetwork(nn.Module):
     def __init__(self):
@@ -85,60 +155,60 @@ class VisionNetwork(nn.Module):
             nn.Conv2d(
                 in_channels=3,
                 out_channels=32,
-                kernel_size=(8,8),
+                kernel_size=(8, 8),
                 stride=4,
-                padding=1 # Padding s.t. the output shapes match the paper.
+                padding=1,  # Padding s.t. the output shapes match the paper.
             ),
             nn.Conv2d(
                 in_channels=32,
                 out_channels=64,
-                kernel_size=(4,4),
+                kernel_size=(4, 4),
                 stride=2,
-                padding=2 # Padding s.t. the output shapes match the paper.
+                padding=2,  # Padding s.t. the output shapes match the paper.
             ),
         )
         self.vision_lstm = ConvLSTMCell(
-            input_channels=64, 
-            hidden_channels=128, 
-            kernel_size=3,
+            input_channels=64, hidden_channels=128, kernel_size=3
         )
 
     def reset(self):
         self.vision_lstm.reset()
 
     def forward(self, X):
-        X = X.transpose(1,3)
+        X = X.transpose(1, 3)
         O, _ = self.vision_lstm(self.vision_cnn(X))
-        return O.transpose(1,3)
+        return O.transpose(1, 3)
+
 
 class QueryNetwork(nn.Module):
     def __init__(self):
         super(QueryNetwork, self).__init__()
         # TODO: Add proper non-linearity.
         self.model = nn.Sequential(
-            nn.Linear(256, 128),
-            nn.Linear(128, 288),
-            nn.Linear(288, 288),
+            nn.Linear(256, 128), nn.Linear(128, 288), nn.Linear(288, 288)
         )
-    
+
     def forward(self, query):
         out = self.model(query)
         return out.reshape(-1, 4, 72)
 
-class SpatialBasis():
+
+class SpatialBasis:
     # TODO: Implement Spatial.
     """
     NOTE: The `height` and `weight` depend on the inputs' size and its resulting size
     after being processed by the vision network.
     """
+
     def __init__(self, height=27, width=20, channels=64):
         self.S = torch.zeros(height, width, channels, requires_grad=False)
-    
+
     def __call__(self, X):
         # Stack the spatial bias (for each batch) and concat to the input.
         batch_size = X.size()[0]
         S = torch.stack([self.S] * batch_size).to(X.device)
         return torch.cat([X, S], dim=3)
+
 
 def spatial_softmax(A):
     # A: batch_size x h x w x d
@@ -149,26 +219,29 @@ def spatial_softmax(A):
     # Reshape A to original shape.
     A = A.reshape(b, h, w, d)
     return A
-    
+
+
 def apply_alpha(A, V):
     # TODO: Check this function again.
     b, h, w, c = A.size()
-    A = A.reshape(b, h * w, c).transpose(1,2)
+    A = A.reshape(b, h * w, c).transpose(1, 2)
 
     _, _, _, d = V.size()
     V = V.reshape(b, h * w, d)
-    
+
     return torch.matmul(A, V)
 
-class Agent(nn.Module): 
-    def __init__(self, 
-            num_actions, 
-            hidden_size: int=256,
-            c_v: int=120,
-            c_k: int=8,
-            c_s: int=64,
-            num_queries: int=4,
-        ):
+
+class Agent(nn.Module):
+    def __init__(
+        self,
+        num_actions,
+        hidden_size: int = 256,
+        c_v: int = 120,
+        c_k: int = 8,
+        c_s: int = 64,
+        num_queries: int = 4,
+    ):
         """Agent implementing the attention agent.
         """
         super(Agent, self).__init__()
@@ -183,21 +256,19 @@ class Agent(nn.Module):
         # TODO: Add non-linear functions as needed.
         self.answer_processor = nn.Sequential(
             # 1026 x 512
-            nn.Linear((c_v + c_s) * num_queries + (c_k + c_s) * num_queries + 1 + 1, 512),
-            nn.Linear(512, hidden_size)
+            nn.Linear(
+                (c_v + c_s) * num_queries + (c_k + c_s) * num_queries + 1 + 1, 512
+            ),
+            nn.Linear(512, hidden_size),
         )
-        
+
         self.policy_core = nn.LSTMCell(hidden_size, hidden_size)
         self.prev_output = None
         self.prev_hidden = None
-        
-        self.policy_head = nn.Sequential(
-            nn.Linear(hidden_size, num_actions)
-        )
-        self.values_head = nn.Sequential(
-            nn.Linear(hidden_size, num_actions)
-        )
-    
+
+        self.policy_head = nn.Sequential(nn.Linear(hidden_size, num_actions))
+        self.values_head = nn.Sequential(nn.Linear(hidden_size, num_actions))
+
     def reset(self):
         self.vision.reset()
         self.prev_output = None
@@ -210,10 +281,10 @@ class Agent(nn.Module):
         batch_size = X.size()[0]
         if prev_reward is None:
             # (n, 1, 1)
-            prev_reward = torch.stack([torch.zeros(1,1)] * batch_size).to(X.device)
+            prev_reward = torch.stack([torch.zeros(1, 1)] * batch_size).to(X.device)
         if prev_action is None:
             # (n, 1, 1)
-            prev_action = torch.stack([torch.zeros(1,1)] * batch_size).to(X.device)
+            prev_action = torch.stack([torch.zeros(1, 1)] * batch_size).to(X.device)
 
         # 1 (a). Vision.
         # --------------
@@ -228,11 +299,12 @@ class Agent(nn.Module):
         # 1 (b). Queries.
         # --------------
         if self.prev_output is None:
-            hidden_state = torch.zeros(batch_size, self.hidden_size, requires_grad=True).to(X.device)
+            hidden_state = torch.zeros(
+                batch_size, self.hidden_size, requires_grad=True
+            ).to(X.device)
             self.prev_output = hidden_state
         # (n, h, w, num_queries, c_k + c_s)
         Q = self.query(self.prev_output)
-        
 
         # 2. Answer.
         # ----------
@@ -245,12 +317,14 @@ class Agent(nn.Module):
 
         # (n, (c_v + c_s) * num_queries + (c_k + c_s) * num_queries + 1 + 1)
         answer = torch.cat(
-            torch.chunk(a, 4, dim=1) + torch.chunk(Q, 4, dim=1) + (prev_reward, prev_action), 
-            dim=2
+            torch.chunk(a, 4, dim=1)
+            + torch.chunk(Q, 4, dim=1)
+            + (prev_reward, prev_action),
+            dim=2,
         ).squeeze(1)
         # (n, hidden_size)
         answer = self.answer_processor(answer)
-        
+
         # 3. Policy.
         # ----------
         if self.prev_hidden is None:
@@ -260,7 +334,7 @@ class Agent(nn.Module):
             self.prev_output, self.prev_hidden = h, c
         # (n, hidden_size)
         output = h
-        
+
         # 4, 5. Outputs.
         # --------------
         # (n, num_actions)
