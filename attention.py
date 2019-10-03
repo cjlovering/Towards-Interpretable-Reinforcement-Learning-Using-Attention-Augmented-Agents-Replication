@@ -295,10 +295,13 @@ class Agent(nn.Module):
         if prev_reward is None:
             # (n, 1, 1)
             prev_reward = torch.stack([torch.zeros(1, 1)] * batch_size).to(X.device)
+        else:
+            prev_reward = prev_reward.unsqueeze(1).unsqueeze(1)
         if prev_action is None:
             # (n, 1, 1)
             prev_action = torch.stack([torch.zeros(1, 1)] * batch_size).to(X.device)
-
+        else:
+            prev_action = prev_action.unsqueeze(1).unsqueeze(1)
         # 1 (a). Vision.
         # --------------
 
@@ -322,7 +325,7 @@ class Agent(nn.Module):
         # 2. Answer.
         # ----------
         # (n, h, w, num_queries)
-        A = torch.matmul(K, Q.transpose(2, 1))
+        A = torch.matmul(K, Q.transpose(2, 1).unsqueeze(1))
         # (n, h, w, num_queries)
         A = spatial_softmax(A)
         # (n, 1, 1, num_queries)
@@ -332,7 +335,7 @@ class Agent(nn.Module):
         answer = torch.cat(
             torch.chunk(a, 4, dim=1)
             + torch.chunk(Q, 4, dim=1)
-            + (prev_reward, prev_action),
+            + (prev_reward.float(), prev_action.float()),
             dim=2,
         ).squeeze(1)
         # (n, hidden_size)
