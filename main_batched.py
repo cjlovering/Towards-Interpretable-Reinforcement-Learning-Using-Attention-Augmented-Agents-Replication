@@ -123,7 +123,7 @@ if __name__ == "__main__":
 
         # Stash model in case of crash.
         if i_episode % config.save_model_interval == 0 and i_episode > 0:
-            torch.save(agent.state_dict(), f"./models/agent-{i_episode}.pt")
+            torch.save(agent.state_dict(), f"./models_batched/agent-{i_episode}.pt")
 
         for t in range(config.max_steps):
             action = policy(observations, prev_reward=reward, prev_action=action)
@@ -158,6 +158,6 @@ if __name__ == "__main__":
                         )
                     )
                 break
-    torch.save(agent.state_dict(), f"./models/agent-final.pt")
+    torch.save(agent.state_dict(), f"./models_batched/agent-final.pt")
     for env in envs:
         env.close()

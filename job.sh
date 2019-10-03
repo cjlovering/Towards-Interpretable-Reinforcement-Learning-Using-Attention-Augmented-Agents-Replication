@@ -10,4 +10,4 @@
 mkdir -p ./models/
 mkdir -p ./runs/
 
-python main.py
+python main_batched.py
