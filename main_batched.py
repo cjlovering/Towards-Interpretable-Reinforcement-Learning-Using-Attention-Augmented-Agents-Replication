@@ -102,7 +102,7 @@ if __name__ == "__main__":
 
     optimizer = optim.Adam(agent.parameters(), lr=1e-3)
     eps = np.finfo(np.float32).eps.item()
-
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     running_reward = 10.0
 
     # NOTE: This is currently batched once for a single instance of the game.
@@ -117,7 +117,7 @@ if __name__ == "__main__":
         # resets hidden states, otherwise the comp. graph history spans episodes
         # and relies on freed buffers.
         agent.reset()
-        ep_reward = torch.zeros(config.batch_size)
+        ep_reward = torch.zeros(config.batch_size).to(device)
         reward = None
         action = None
 
@@ -127,7 +127,7 @@ if __name__ == "__main__":
 
         for t in range(config.max_steps):
             action = policy(observations, prev_reward=reward, prev_action=action)
-            reward = torch.zeros(config.batch_size)
+            reward = torch.zeros(config.batch_size).to(device)
 
             observations = []
             for idx in range(config.batch_size):
