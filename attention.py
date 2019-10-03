@@ -1,7 +1,7 @@
+import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-
 
 class ConvLSTMCell(nn.Module):
     def __init__(self, input_channels, hidden_channels, kernel_size):
@@ -185,7 +185,7 @@ class QueryNetwork(nn.Module):
         super(QueryNetwork, self).__init__()
         # TODO: Add proper non-linearity.
         self.model = nn.Sequential(
-            nn.Linear(256, 128), nn.Linear(128, 288), nn.Linear(288, 288)
+            nn.Linear(256, 128), nn.ReLU(), nn.Linear(128, 288), nn.ReLU(), nn.Linear(288, 288)
         )
 
     def forward(self, query):
@@ -201,7 +201,20 @@ class SpatialBasis:
     """
 
     def __init__(self, height=27, width=20, channels=64):
-        self.S = torch.zeros(height, width, channels, requires_grad=False)
+        h, w, d = height, width, channels
+
+        p_h = torch.mul(torch.arange(1, h+1).unsqueeze(1).float(), torch.ones(1, w).float()) * (np.pi / h)
+        p_w = torch.mul(torch.ones(h, 1).float(), torch.arange(1, w+1).unsqueeze(0).float()) * (np.pi / w)
+        
+        # NOTE: I didn't quite see how U,V = 4 made sense given that the authors form the spatial
+        # basis by taking the outer product of the values. Still, I think what I have is aligned with what
+        # they did, but I am less confident in this step.
+        U = V = 8 # size of U, V. 
+        u_basis = v_basis = torch.arange(1, U+1).unsqueeze(0).float()
+        a = torch.mul(p_h.unsqueeze(2), u_basis)
+        b = torch.mul(p_w.unsqueeze(2), v_basis)
+        out = torch.einsum('hwu,hwv->hwuv', torch.cos(a), torch.cos(b)).reshape(h, w, d)
+        self.S = out
 
     def __call__(self, X):
         # Stack the spatial bias (for each batch) and concat to the input.
@@ -253,12 +266,12 @@ class Agent(nn.Module):
         # TODO: Implement SpatialBasis.
         self.spatial = SpatialBasis()
 
-        # TODO: Add non-linear functions as needed.
         self.answer_processor = nn.Sequential(
             # 1026 x 512
             nn.Linear(
                 (c_v + c_s) * num_queries + (c_k + c_s) * num_queries + 1 + 1, 512
             ),
+            nn.ReLU(),
             nn.Linear(512, hidden_size),
         )
 
