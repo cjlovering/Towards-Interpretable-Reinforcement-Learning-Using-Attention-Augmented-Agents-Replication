@@ -1,14 +1,13 @@
 import argparse
 import gym
-import numpy as np
 import torch
 
-import attention
-
-
+import numpy as np
 import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
+
+import attention
 
 
 class Policy(nn.Module):
@@ -20,6 +19,8 @@ class Policy(nn.Module):
         self.rewards = []
 
     def forward(self, observation):
+        """Sample action from agents output distribution over actions.
+        """
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         # Unsqueeze to give a batch size of 1.
         state = torch.from_numpy(observation).float().unsqueeze(0).to(device)
@@ -32,6 +33,8 @@ class Policy(nn.Module):
 
 
 def finish_episode(optimizer, policy, config):
+    """Updates model using REINFORCE.
+    """
     R = 0
     policy_loss = []
     returns = []
@@ -92,7 +95,7 @@ if __name__ == "__main__":
     if torch.cuda.is_available():
         policy.cuda()
 
-    optimizer = optim.Adam(policy.parameters(), lr=1e-2)
+    optimizer = optim.Adam(policy.parameters(), lr=1e-3)
     eps = np.finfo(np.float32).eps.item()
 
     running_reward = 10.0
