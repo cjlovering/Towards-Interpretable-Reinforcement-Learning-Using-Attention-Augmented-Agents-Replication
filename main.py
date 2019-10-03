@@ -20,7 +20,9 @@ class Policy(nn.Module):
         self.rewards = []
 
     def forward(self, observation):
-        state = torch.from_numpy(observation).float().unsqueeze(0)
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Unsqueeze to give a batch size of 1.
+        state = torch.from_numpy(observation).float().unsqueeze(0).to(device)
         action_scores, _ = self.agent(state)
         action_probs = F.softmax(action_scores, dim=-1)
         dist = torch.distributions.Categorical(action_probs)
@@ -50,10 +52,10 @@ def finish_episode(optimizer, policy, config):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--num_episodes", type=int, default=500)
+    parser.add_argument("--num_episodes", type=int, default=10_000)
     parser.add_argument("--num_repeat_action", type=int, default=4)
     parser.add_argument("--reward_threshold", type=int, default=1_000)
-    parser.add_argument("--max_steps", type=int, default=1_000)
+    parser.add_argument("--max_steps", type=int, default=10_000)
     parser.add_argument(
         "--gamma",
         type=float,
@@ -72,6 +74,12 @@ if __name__ == "__main__":
         metavar="N",
         help="interval between training status logs (default: 10)",
     )
+    parser.add_argument(
+        "--save-model-interval",
+        type=int,
+        default=250,
+        help="interval between saving models.",
+    )
     config = parser.parse_args()
 
     env = gym.make("Seaquest-v0")
@@ -80,8 +88,10 @@ if __name__ == "__main__":
 
     num_actions = env.action_space.n
     agent = attention.Agent(num_actions=num_actions)
-
     policy = Policy(agent=agent)
+    if torch.cuda.is_available():
+        policy.cuda()
+
     optimizer = optim.Adam(policy.parameters(), lr=1e-2)
     eps = np.finfo(np.float32).eps.item()
 
@@ -98,6 +108,11 @@ if __name__ == "__main__":
         # and relies on freed buffers.
         agent.reset()
         ep_reward = 0
+
+        # Stash model in case of crash.
+        if i_episode % config.save_model_interval == 0 and i_episode > 0:
+            torch.save(agent.state_dict(), f"./models/agent-{i_episode}.pt")
+
         for t in range(config.max_steps):
             action = policy(observation)
             reward = 0.0
@@ -127,4 +142,5 @@ if __name__ == "__main__":
                         )
                     )
                 break
+    torch.save(agent.state_dict(), f"./models/agent-final.pt")
     env.close()
