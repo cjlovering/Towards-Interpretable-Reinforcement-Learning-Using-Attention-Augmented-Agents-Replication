@@ -111,6 +111,8 @@ if __name__ == "__main__":
     # a different update mechanism as of now (REINFORCE vs. A3C).
 
     for i_episode in range(config.num_episodes):
+        if torch.cuda.is_available():
+            print(torch.cuda.memory_allocated())
         observations = [
             env.reset() for env in envs
         ]
@@ -125,23 +127,29 @@ if __name__ == "__main__":
         if i_episode % config.save_model_interval == 0 and i_episode > 0:
             torch.save(agent.state_dict(), f"./models_batched/agent-{i_episode}.pt")
 
+        done = set()
         for t in range(config.max_steps):
             action = policy(observations, prev_reward=reward, prev_action=action)
             reward = torch.zeros(config.batch_size).to(device)
 
             observations = []
             for idx in range(config.batch_size):
-                r = 0
+                if idx in done:
+                    continue
+                r = 0.
                 for _ in range(config.num_repeat_action):
-                    observation, _reward, done, _ = envs[idx].step(action[idx])
+                    observation, _reward, _done, _ = envs[idx].step(action[idx])
                     r += _reward
-                if done:
-                    break
+                    if _done:
+                        break
                 reward[idx] = r
                 observations.append(observation)
+                if _done:
+                    done.add(idx)
+                    break
             policy.rewards.append(reward)
             ep_reward += reward
-            if done:
+            if len(done) == config.batch_size:
                 running_reward = 0.05 * ep_reward.mean() + (1 - 0.05) * running_reward
                 finish_episode(optimizer, policy, config)
                 if i_episode % config.log_interval == 0:
