@@ -1,6 +1,7 @@
 import argparse
 import gym
 import torch
+import time
 from collections import defaultdict
 
 import numpy as np
@@ -88,10 +89,10 @@ if __name__ == "__main__":
     config = parser.parse_args()
 
     envs = []
-    for _ in range(config.batch_size):
+    torch.manual_seed(config.seed)
+    for idx in range(config.batch_size):
         env = gym.make("Seaquest-v0")
-        torch.manual_seed(config.seed)
-        env.seed(config.seed)
+        env.seed(config.seed + idx)
         envs.append(env)
 
     num_actions = env.action_space.n
@@ -110,12 +111,35 @@ if __name__ == "__main__":
     # across different instances of the game (trajectories). I also am using
     # a different update mechanism as of now (REINFORCE vs. A3C).
 
+    current = time.time()
     for i_episode in range(config.num_episodes):
         if torch.cuda.is_available():
             print(torch.cuda.memory_allocated())
         observations = [
             env.reset() for env in envs
         ]
+        def fill_list(x):
+            """Fills list with placeholder observations.
+
+            Using this is unfortunately quite wasteful -- if only 1 of the games is
+            still playing, then the rest of the computation is just zero noise.
+            """
+            placeholder = np.zeros_like(observations[0])
+            return x + [placeholder for _ in range(config.batch_size - len(x))]
+
+        def fill_tensor_1D(x):
+            """Fills placeholder tensor with real-values.
+
+            This is used to keep `actions` and `rewards` at the same batchsize 
+            across steps in an episode where the various games end at varying steps.
+
+            Using this is unfortunately quite wasteful -- if only 1 of the games is
+            still playing, then the rest of the computation is just zero noise.
+            """
+            placeholder = torch.zeros(config.batch_size).float().to(device)
+            placeholder[0:len(x)] += x.float()
+            return placeholder
+
         # resets hidden states, otherwise the comp. graph history spans episodes
         # and relies on freed buffers.
         agent.reset()
@@ -129,9 +153,18 @@ if __name__ == "__main__":
 
         done = set()
         for t in range(config.max_steps):
-            action = policy(observations, prev_reward=reward, prev_action=action)
-            reward = torch.zeros(config.batch_size).to(device)
 
+            # Buffer inputs because the internal states may have tensors that
+            # are of the original batch_size even if some agents' episodes terminate.
+            _reward = fill_tensor_1D(reward) if reward is not None else None
+            _action = fill_tensor_1D(action) if action is not None else None
+            _observations = fill_list(observations)
+
+            # The agent policy operates on all batches at the same time.
+            action = policy(_observations, prev_reward=_reward, prev_action=_action)
+
+            # Step each env separately.
+            reward = torch.zeros(config.batch_size).to(device)
             observations = []
             for idx in range(config.batch_size):
                 if idx in done:
@@ -152,10 +185,11 @@ if __name__ == "__main__":
             if len(done) == config.batch_size:
                 running_reward = 0.05 * ep_reward.mean() + (1 - 0.05) * running_reward
                 finish_episode(optimizer, policy, config)
+                time_elapsed, current = time.time() - current, time.time()
                 if i_episode % config.log_interval == 0:
                     print(
-                        "Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}".format(
-                            i_episode, ep_reward.mean(), running_reward
+                        "Episode {}\tLast reward: {:.2f}\tAverage reward: {:.2f}\t Max steps: {:.2f}\t Time elapsed: {:.2f}".format(
+                            i_episode, ep_reward.mean(), running_reward, t, time_elapsed
                         )
                     )
                 if running_reward > config.reward_threshold:
