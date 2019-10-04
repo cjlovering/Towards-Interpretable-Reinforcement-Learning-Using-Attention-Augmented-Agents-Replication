@@ -1,7 +1,8 @@
 #!/bin/sh
 #$ -cwd
 #$ -l long
-#$ -l gpus=1
+#$ -l vf=4G
+#$ -pe smp 32
 #$ -t 1
 #$ -e ./logs/
 #$ -o ./logs/
@@ -10,4 +11,4 @@
 mkdir -p ./models/
 mkdir -p ./runs/
 
-python main_batched.py
+python main_mp.py --num_agents 32
